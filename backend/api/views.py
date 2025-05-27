@@ -30,12 +30,16 @@ class PatientContactView(generics.ListAPIView):
 
         if not queryset.exists(): 
             default_contact = PatientContact.objects.create(
-                patient_name="Elderly Patient 1",
+                patient_name="test patient",
+                patient_height="170 cm",
+                patient_weight="70 kg",
+                patient_age=30,
+                patient_sex = "male",
                 doctor_name="Dr. Smith",
                 doctor_phone="123-456-7890",
                 doctor_email="dr.smith@example.com",
-                emergency_contact_name="Jane Doe (Daughter)",
-                emergency_contact_phone="098-765-4321"
+                emergency_contact_name="Jhone Doe (son)",
+                emergency_contact_phone="+919778235268"
             )
             serializer = self.get_serializer(default_contact) 
             return Response([serializer.data], status=status.HTTP_200_OK) 
