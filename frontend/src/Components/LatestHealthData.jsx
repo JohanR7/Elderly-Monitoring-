@@ -174,7 +174,7 @@ function LatestHealthData() {
     );
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="p-10">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="text-center mb-8">
@@ -235,22 +235,6 @@ function LatestHealthData() {
                                 <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">Hypertension</span>
                                 <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">Diabetes Type 2</span>
                                 <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm">Osteoporosis</span>
-                            </div>
-                        </div>
-
-                        {/* Quick Actions */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                            <h3 className="font-medium text-gray-700 mb-4">Quick Actions</h3>
-                            <div className="space-y-3">
-                                <ActionButton variant="blue" onClick={handleViewHistory}>
-                                    View Medical History
-                                </ActionButton>
-                                <ActionButton variant="green" onClick={handleSendMessage}>
-                                    Send Check-in Message
-                                </ActionButton>
-                                <ActionButton variant="purple" onClick={handleScheduleAppointment}>
-                                    Schedule Appointment
-                                </ActionButton>
                             </div>
                         </div>
                     </div>
@@ -341,7 +325,7 @@ function LatestHealthData() {
                         {/* Vital Signs Chart */}
                         {historicalData.length > 0 && (
                             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                                <h3 className="font-medium text-gray-700 mb-6">Vital Signs Trend</h3>
+                                <h3 className="font-medium text-gray-700 mb-6">Vital Signs </h3>
                                 <div className="h-64">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={historicalData}>
@@ -388,18 +372,6 @@ function LatestHealthData() {
                                 </div>
                             </div>
                         )}
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="mt-8 flex justify-between items-center text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span>System Online - Last Update: {formatTime(currentTime)}</span>
-                    </div>
-                    <div className="flex gap-6">
-                        <span>Emergency Services: 911</span>
-                        <span>Medical Support: +1 (555) 123-4567</span>
                     </div>
                 </div>
             </div>

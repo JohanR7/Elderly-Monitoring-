@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { FileText, Activity, Heart, Thermometer, TrendingUp, AlertTriangle, CheckCircle, Clock, Brain, Shield } from "lucide-react";
 import { API_BASE_URL, GEMINI_API_KEY } from "../config";
 
 function HealthReportGenerator() {
@@ -19,7 +20,6 @@ function HealthReportGenerator() {
       const response = await axios.get(`${API_BASE_URL}/health-data/latest`);
 
       if (response.data && response.data.length > 0) {
-        // Process data for AI analysis
         const healthData = response.data;
 
         // Generate summary statistics
@@ -39,7 +39,7 @@ function HealthReportGenerator() {
         );
         const fallEvents = healthData.filter((d) => d.fall_detected).length;
 
-        // Generate AI-powered analysis using Gemini
+        // Generate AI-powered analysis using Gemini (simulated)
         const aiAnalysis = await generateAIAnalysis(healthData, {
           avgHeartRate,
           avgSpo2,
@@ -206,7 +206,7 @@ Please format your response as a JSON object with the following structure:
 
     return risks.length > 0
       ? risks
-      : ["No significant risk factors identified"];
+      : [];
   };
 
   // Helper functions
@@ -216,10 +216,8 @@ Please format your response as a JSON object with the following structure:
   };
 
   const analyzeTrends = (data) => {
-    // Simple trend analysis (could be expanded with AI integration)
     if (data.length < 2) return "Not enough data for trend analysis";
 
-    // Compare most recent with earlier readings
     const recent = data.slice(0, Math.min(5, data.length));
     const older = data.slice(Math.max(0, data.length - 5));
 
@@ -244,8 +242,6 @@ Please format your response as a JSON object with the following structure:
   };
 
   const generateRecommendations = (data) => {
-    // This would ideally integrate with an AI service like Gemini
-    // For now, we'll use basic rules-based recommendations
     const recommendations = [];
     const latest = data[0];
 
@@ -280,118 +276,264 @@ Please format your response as a JSON object with the following structure:
         ];
   };
 
-  if (loading)
-    return <p className="loading">Generating AI-powered health report...</p>;
+  const ActionButton = ({ children, variant, onClick, disabled = false }) => {
+    const baseClasses = "w-full py-3 px-4 rounded-lg font-medium text-white transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed";
+    const variants = {
+      blue: "bg-blue-500 hover:bg-blue-600 disabled:hover:bg-blue-500",
+      green: "bg-green-500 hover:bg-green-600 disabled:hover:bg-green-500",
+      purple: "bg-purple-500 hover:bg-purple-600 disabled:hover:bg-purple-500",
+      red: "bg-red-500 hover:bg-red-600 disabled:hover:bg-red-500"
+    };
+    return (
+      <button
+        className={`${baseClasses} ${variants[variant]}`}
+        onClick={onClick}
+        disabled={disabled}
+      >
+        {children}
+      </button>
+    );
+  };
+
+  const MetricCard = ({ icon: Icon, title, value, unit, color }) => (
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className={`w-4 h-4 ${color}`} />
+        <span className="text-gray-600 text-sm font-medium">{title}</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-2xl font-bold text-gray-800">{value}</span>
+        <span className="text-sm text-gray-500">{unit}</span>
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <Brain className="w-12 h-12 text-purple-600 animate-pulse mx-auto mb-4" />
+          <p className="text-gray-600 text-lg font-medium">Generating AI-powered health report...</p>
+          <p className="text-gray-500 text-sm mt-2">Analyzing health data patterns</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="health-report">
-      {!report && (
-        <button onClick={generateReport} className="report-button">
-          Generate AI Health Report
-        </button>
-      )}
-
-      {error && <p className="error">{error}</p>}
-
-      {report && (
-        <div className="report-content">
-          <h3>AI-Powered Health Report</h3>
-          <p>
-            <strong>Generated:</strong> {report.generatedAt}
-          </p>
-          <p>
-            <strong>Based on:</strong> {report.dataPoints} readings from{" "}
-            {report.timeRange.from} to {report.timeRange.to}
-          </p>
-
-          {report.healthScore && (
-            <div style={{ textAlign: "center", margin: "2rem 0" }}>
-              <h4>Health Score</h4>
-              <div
-                style={{
-                  fontSize: "3rem",
-                  fontWeight: "bold",
-                  color:
-                    report.healthScore >= 80
-                      ? "#38a169"
-                      : report.healthScore >= 60
-                      ? "#d69e2e"
-                      : "#e53e3e",
-                }}
-              >
-                {report.healthScore}/100
-              </div>
-              <p
-                style={{
-                  color:
-                    report.healthScore >= 80
-                      ? "#38a169"
-                      : report.healthScore >= 60
-                      ? "#d69e2e"
-                      : "#e53e3e",
-                  fontWeight: "bold",
-                }}
-              >
-                {report.healthScore >= 80
-                  ? "Good Health"
-                  : report.healthScore >= 60
-                  ? "Fair Health"
-                  : "Needs Attention"}
-              </p>
-            </div>
-          )}
-
-          {report.summary && (
-            <>
-              <h4>Health Summary</h4>
-              <p
-                style={{
-                  fontStyle: "italic",
-                  backgroundColor: "rgba(102, 126, 234, 0.1)",
-                  padding: "1rem",
-                  borderRadius: "8px",
-                }}
-              >
-                {report.summary}
-              </p>
-            </>
-          )}
-
-          <h4>Average Readings</h4>
-          <p>Heart Rate: {report.averages.heartRate} bpm</p>
-          <p>SpO2: {report.averages.spo2}%</p>
-          <p>Temperature: {report.averages.temperature} °C</p>
-          <p>Blood Pressure: {report.averages.bloodPressure} mmHg</p>
-          <p>Fall Events: {report.fallEvents}</p>
-
-          <h4>Health Trends</h4>
-          <p>{report.trends}</p>
-
-          {report.riskFactors && report.riskFactors.length > 0 && (
-            <>
-              <h4>Risk Factors</h4>
-              <ul>
-                {report.riskFactors.map((risk, idx) => (
-                  <li key={idx} style={{ color: "#e53e3e" }}>
-                    {risk}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <h4>AI Recommendations</h4>
-          <ul>
-            {report.recommendations.map((rec, idx) => (
-              <li key={idx}>{rec}</li>
-            ))}
-          </ul>
-
-          <button onClick={() => setReport(null)} className="report-button">
-            Close Report
-          </button>
+    <div>
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <FileText className="w-8 h-8 text-purple-600" />
+            <h1 className="text-3xl font-bold text-gray-800">AI Health Report Generator</h1>
+          </div>
+          <p className="text-gray-600">Generate comprehensive health analysis reports</p>
         </div>
-      )}
+
+        {!report && !error && (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center">
+              <Brain className="w-16 h-16 text-purple-600 mx-auto mb-6" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Generate Your Health Report</h2>
+              <p className="text-gray-600 mb-8">
+                Our AI system will analyze your recent health data to provide comprehensive insights, 
+                trends analysis, and personalized recommendations.
+              </p>
+              <ActionButton variant="purple" onClick={generateReport}>
+                <div className="flex items-center justify-center gap-2">
+                  <Brain className="w-5 h-5" />
+                  Generate AI Health Report
+                </div>
+              </ActionButton>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white rounded-xl p-8 shadow-sm border border-red-200 text-center">
+              <AlertTriangle className="w-16 h-16 text-red-600 mx-auto mb-6" />
+              <h2 className="text-xl font-bold text-red-700 mb-4">Report Generation Failed</h2>
+              <p className="text-red-600 mb-6">{error}</p>
+              <ActionButton variant="red" onClick={generateReport}>
+                Try Again
+              </ActionButton>
+            </div>
+          </div>
+        )}
+
+        {report && (
+          <div className="space-y-6">
+            {/* Report Header */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <FileText className="w-6 h-6 text-purple-600" />
+                <h2 className="text-2xl font-bold text-gray-800">AI-Powered Health Report</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Generated: {report.generatedAt}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Activity className="w-4 h-4" />
+                  <span>Data Points: {report.dataPoints} readings</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>From: {report.timeRange.from}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Health Score */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <Shield className="w-6 h-6 text-green-600" />
+                  <h3 className="text-xl font-bold text-gray-800">Overall Health Score</h3>
+                </div>
+                <div className="mb-4">
+                  <div
+                    className={`text-6xl font-bold mb-2 ${
+                      report.healthScore >= 80
+                        ? "text-green-600"
+                        : report.healthScore >= 60
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {report.healthScore}/100
+                  </div>
+                  <p
+                    className={`text-lg font-semibold ${
+                      report.healthScore >= 80
+                        ? "text-green-600"
+                        : report.healthScore >= 60
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {report.healthScore >= 80
+                      ? "Excellent Health"
+                      : report.healthScore >= 60
+                      ? "Good Health"
+                      : "Needs Attention"}
+                  </p>
+                </div>
+                {report.summary && (
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-gray-700 italic">{report.summary}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Average Readings */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3 mb-6">
+                <Activity className="w-6 h-6 text-blue-600" />
+                <h3 className="text-xl font-bold text-gray-800">Average Vital Signs</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <MetricCard
+                  icon={Heart}
+                  title="Heart Rate"
+                  value={report.averages.heartRate}
+                  unit="bpm"
+                  color="text-red-500"
+                />
+                <MetricCard
+                  icon={Activity}
+                  title="SpO2"
+                  value={report.averages.spo2}
+                  unit="%"
+                  color="text-blue-500"
+                />
+                <MetricCard
+                  icon={Thermometer}
+                  title="Temperature"
+                  value={report.averages.temperature}
+                  unit="°C"
+                  color="text-orange-500"
+                />
+                <MetricCard
+                  icon={Heart}
+                  title="Blood Pressure"
+                  value={report.averages.bloodPressure}
+                  unit="mmHg"
+                  color="text-purple-500"
+                />
+              </div>
+            </div>
+
+            {/* Health Trends */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="w-6 h-6 text-green-600" />
+                <h3 className="text-xl font-bold text-gray-800">Health Trends Analysis</h3>
+              </div>
+              <div className="bg-green-50 p-4 rounded-lg">
+                <p className="text-gray-700">{report.trends}</p>
+              </div>
+            </div>
+
+            {/* Risk Factors */}
+            {report.riskFactors && report.riskFactors.length > 0 && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 mb-4">
+                  <AlertTriangle className="w-6 h-6 text-yellow-600" />
+                  <h3 className="text-xl font-bold text-gray-800">Risk Factors</h3>
+                </div>
+                <div className="space-y-2">
+                  {report.riskFactors.map((risk, idx) => (
+                    <div key={idx} className="flex items-start gap-3 p-3 bg-yellow-50 rounded-lg">
+                      <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                      <span className="text-gray-700">{risk}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Recommendations */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <CheckCircle className="w-6 h-6 text-blue-600" />
+                <h3 className="text-xl font-bold text-gray-800">AI Recommendations</h3>
+              </div>
+              <div className="space-y-3">
+                {report.recommendations.map((rec, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                    <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <span className="text-gray-700">{rec}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ActionButton variant="green" onClick={() => window.print()}>
+                  <div className="flex items-center justify-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Print Report
+                  </div>
+                </ActionButton>
+                <ActionButton variant="blue" onClick={() => setReport(null)}>
+                  <div className="flex items-center justify-center gap-2">
+                    <Brain className="w-4 h-4" />
+                    Generate New Report
+                  </div>
+                </ActionButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
