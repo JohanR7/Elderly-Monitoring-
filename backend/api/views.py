@@ -141,6 +141,110 @@ class AuthenticatedPatientContactView(generics.RetrieveAPIView):
         return Patient.objects.get(user=self.request.user)
 
 @api_view(['GET'])
+@permission_classes([AllowAny])
+def get_patient_by_device(request, device_id):
+    """Get patient information by device ID for MQTT client"""
+    try:
+        device = Device.objects.get(device_id=device_id)
+        patient = Patient.objects.get(device=device)
+        
+        return Response({
+            'device_id': device.device_id,
+            'patient_name': patient.patient_name,
+            'patient_age': patient.patient_age,
+            'patient_sex': patient.patient_sex,
+            'emergency_contact_phone': patient.emergency_contact_phone,
+            'doctor_phone': patient.doctor_phone,
+            'doctor_name': patient.doctor_name,
+            'last_activity': device.last_activity,
+            'is_active': device.is_device_active()
+        })
+    except Device.DoesNotExist:
+        return Response({
+            'error': 'Device not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Patient.DoesNotExist:
+        return Response({
+            'error': 'Patient not found for this device'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])  
+def log_emergency_event(request):
+    """Log emergency events from MQTT client"""
+    try:
+        device_id = request.data.get('device_id')
+        event_type = request.data.get('event_type', 'emergency')  # 'emergency', 'call', 'fall'
+        details = request.data.get('details', {})
+        
+        if not device_id:
+            return Response({
+                'error': 'device_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        device, created = Device.objects.get_or_create(
+            device_id=device_id,
+            defaults={'device_name': f'Device {device_id}'}
+        )
+        
+        # Create a health data entry to log the event
+        health_data = HealthData.objects.create(
+            device=device,
+            heart_rate=details.get('heart_rate'),
+            spo2=details.get('spo2'),
+            body_temp=details.get('body_temp'),
+            fall_detected=details.get('fall_detected', False),
+            blood_pressure=details.get('blood_pressure')
+        )
+        
+        return Response({
+            'id': health_data.id,
+            'message': f'{event_type} event logged successfully',
+            'timestamp': health_data.timestamp
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Updated device status view to accept device_id parameter
+@api_view(['GET'])
+@permission_classes([AllowAny])  # Allow MQTT client to check any device
+def device_status_by_id(request, device_id):
+    """Check device status by device ID"""
+    try:
+        device = Device.objects.get(device_id=device_id)
+        
+        is_active = device.is_device_active()
+        last_activity = device.last_activity
+        
+        # Get associated patient info if available
+        patient_info = None
+        try:
+            patient = Patient.objects.get(device=device)
+            patient_info = {
+                'name': patient.patient_name,
+                'age': patient.patient_age,
+                'emergency_contact': patient.emergency_contact_phone
+            }
+        except Patient.DoesNotExist:
+            pass
+        
+        return Response({
+            'device_id': device.device_id,
+            'is_active': is_active,
+            'last_activity': last_activity,
+            'status': 'active' if is_active else 'inactive',
+            'patient': patient_info
+        })
+    except Device.DoesNotExist:
+        return Response({
+            'error': 'Device not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+# Keep the original device_status view for authenticated users
+@api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def device_status(request):
     """Check if the user's device is active (received data in last 2 minutes)"""

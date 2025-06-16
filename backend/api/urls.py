@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (
     HealthDataPostView, LatestHealthDataView, PatientContactView,
     register_patient, login, logout, PatientHealthHistoryView,
-    PatientProfileView, AuthenticatedPatientContactView, device_status
+    PatientProfileView, AuthenticatedPatientContactView, device_status,
+    get_patient_by_device, log_emergency_event, device_status_by_id
 )
 
 urlpatterns = [
@@ -18,6 +19,11 @@ urlpatterns = [
     
     # Device Status
     path('device/status/', device_status, name='device-status'),
+    path('device/<str:device_id>/status/', device_status_by_id, name='device-status-by-id'),
+    path('device/<str:device_id>/patient/', get_patient_by_device, name='patient-by-device'),
+    
+    # Emergency Events
+    path('emergency/log/', log_emergency_event, name='log-emergency-event'),
     
     # Patient Info
     path('patient/profile/', PatientProfileView.as_view(), name='patient-profile'),
