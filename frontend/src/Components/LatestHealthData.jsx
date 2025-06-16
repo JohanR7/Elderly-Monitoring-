@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Activity, Thermometer, Shield, Phone, MapPin, User, AlertTriangle } from 'lucide-react';
+import { Heart, Activity, Thermometer, Shield, Phone, MapPin, User, AlertTriangle, Wifi, WifiOff } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { useAuth } from './AuthContext';
 
 function LatestHealthData() {
     const [currentTime, setCurrentTime] = useState(new Date());
@@ -8,9 +9,8 @@ function LatestHealthData() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [historicalData, setHistoricalData] = useState([]);
-
-    // Mock API base URL - replace with your actual backend URL
-    const API_BASE_URL = 'http://localhost:8000/api'; // Adjust this to your backend URL
+    const [deviceStatus, setDeviceStatus] = useState({ is_active: true, status: 'active' });
+    const { user, token } = useAuth();
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -32,14 +32,33 @@ function LatestHealthData() {
             setLoading(true);
             setError(null);
             try {
-                // ✅ Actual API call
-                const response = await fetch(`${API_BASE_URL}/health-data/latest/`);
+                // Fetch both health data and device status
+                const [healthResponse, statusResponse] = await Promise.all([
+                    fetch('/api/health-data/latest/', {
+                        headers: {
+                            'Authorization': `Token ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    }),
+                    fetch('/api/device/status/', {
+                        headers: {
+                            'Authorization': `Token ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                    })
+                ]);
 
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
+                if (!healthResponse.ok) {
+                    throw new Error(`HTTP error! Status: ${healthResponse.status}`);
                 }
 
-                const responseData = await response.json();
+                const responseData = await healthResponse.json();
+                
+                // Update device status if available
+                if (statusResponse.ok) {
+                    const statusData = await statusResponse.json();
+                    setDeviceStatus(statusData);
+                }
 
                 if (responseData && responseData.length > 0) {
                     const latestData = responseData[0];
@@ -70,14 +89,23 @@ function LatestHealthData() {
             }
         };
 
-        fetchData();
-        const intervalId = setInterval(fetchData, 30000);
-        return () => clearInterval(intervalId);
-    }, []);
+        if (token) {
+            fetchData();
+            const intervalId = setInterval(fetchData, 30000);
+            return () => clearInterval(intervalId);
+        }
+    }, [token]);
 
 
     const handleEmergencyCall = () => {
-        alert('Emergency call initiated to Dr. Sarah Wilson');
+        if (user?.doctor_phone) {
+            const confirmCall = window.confirm(`Call ${user.doctor_name || 'Doctor'} at ${user.doctor_phone}?`);
+            if (confirmCall) {
+                window.open(`tel:${user.doctor_phone}`);
+            }
+        } else {
+            alert('Doctor contact information not available');
+        }
     };
 
     const handleViewHistory = () => {
@@ -174,205 +202,223 @@ function LatestHealthData() {
     );
 
     return (
-        <div className="p-10">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="flex items-center justify-center gap-3 mb-2">
-                        <Activity className="w-8 h-8 text-blue-600" />
-                        <h1 className="text-3xl font-bold text-gray-800">Elderly Monitoring System</h1>
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800">Health Dashboard</h1>
+                        <p className="text-gray-600">Real-time monitoring for {user?.patient_name || 'Patient'}</p>
                     </div>
-                    <p className="text-gray-600">Real-time health monitoring dashboard</p>
+                    <div className="flex items-center gap-4">
+                        <div className="text-right">
+                            <p className="text-sm text-gray-500">Current Time</p>
+                            <p className="text-lg font-semibold text-gray-800">{formatTime(currentTime)}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                            <span className="text-sm text-gray-600">Live</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Vital Signs Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <VitalCard
+                    icon={Heart}
+                    title="Heart Rate"
+                    value={data.heart_rate !== null ? data.heart_rate.toString() : "N/A"}
+                    unit="bpm"
+                    status={getVitalStatus('heart_rate', data.heart_rate)}
+                    color="text-red-500"
+                    isAlert={data.heart_rate < 60 || data.heart_rate > 100}
+                />
+
+                <VitalCard
+                    icon={Activity}
+                    title="SpO2"
+                    value={data.spo2 !== null ? data.spo2.toString() : "N/A"}
+                    unit="%"
+                    status={getVitalStatus('spo2', data.spo2)}
+                    color="text-blue-500"
+                    isAlert={data.spo2 < 95}
+                />
+
+                <VitalCard
+                    icon={Thermometer}
+                    title="Body Temp"
+                    value={data.body_temp !== null ? data.body_temp.toFixed(1) : "N/A"}
+                    unit="°C"
+                    status={getVitalStatus('body_temp', data.body_temp)}
+                    color="text-orange-500"
+                    isAlert={data.body_temp < 36 || data.body_temp > 37.5}
+                />
+
+                <div className={`bg-white rounded-xl p-6 shadow-sm border ${data.fall_detected ? 'border-red-200 bg-red-50' : 'border-gray-100'}`}>
+                    <div className="flex items-center gap-3 mb-4">
+                        <Shield className={`w-5 h-5 ${data.fall_detected ? 'text-red-500' : 'text-green-500'}`} />
+                        <span className={`text-sm font-medium ${data.fall_detected ? 'text-red-600' : 'text-gray-600'}`}>
+                            Fall Detection
+                        </span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                        <span className={`text-2xl sm:text-3xl font-bold ${data.fall_detected ? 'text-red-700' : 'text-gray-800'}`}>
+                            {data.fall_detected ? 'ALERT!' : 'Safe'}
+                        </span>
+                    </div>
+                    <div className="mt-2">
+                        <span className={`text-sm font-medium ${data.fall_detected ? 'text-red-600' : 'text-green-600'}`}>
+                            {data.fall_detected ? 'Immediate Attention Required' : 'No Falls Detected'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Charts and Additional Info */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Trend Chart */}
+                <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+                        <h3 className="text-lg font-semibold text-gray-800">Vital Signs Trend</h3>
+                        <div className="flex flex-wrap gap-4 mt-2 sm:mt-0">
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                                <span className="text-sm text-gray-600">Heart Rate</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                                <span className="text-sm text-gray-600">SpO2</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                                <span className="text-sm text-gray-600">Body Temp</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {historicalData.length > 0 ? (
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={historicalData}>
+                                    <XAxis 
+                                        dataKey="time" 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12, fill: '#6B7280' }}
+                                    />
+                                    <YAxis 
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fontSize: 12, fill: '#6B7280' }}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="heartRate" 
+                                        stroke="#EF4444" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#EF4444', strokeWidth: 2, r: 4 }}
+                                        connectNulls={false}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="spO2" 
+                                        stroke="#3B82F6" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
+                                        connectNulls={false}
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="bodyTemp" 
+                                        stroke="#F97316" 
+                                        strokeWidth={2}
+                                        dot={{ fill: '#F97316', strokeWidth: 2, r: 4 }}
+                                        connectNulls={false}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+                            <p className="text-gray-500">Collecting data points...</p>
+                        </div>
+                    )}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* Left Column - Patient Info */}
-                    <div className="lg:col-span-1 space-y-6">
-                        {/* Patient Information */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-3 mb-4">
-                                <User className="w-5 h-5 text-blue-600" />
-                                <span className="font-medium text-gray-700">Patient Information</span>
+                {/* Quick Actions */}
+                <div className="space-y-4">
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Emergency Contact</h3>
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-sm text-gray-600">Doctor</p>
+                                <p className="font-medium text-gray-800">{user?.doctor_name || 'Not Available'}</p>
+                                <p className="text-sm text-blue-600">{user?.doctor_phone || 'No phone'}</p>
                             </div>
-                            <div className="space-y-3">
-                                <h2 className="text-xl font-bold text-gray-800">Margaret Johnson</h2>
-                                <p className="text-gray-600">Age: 78 years</p>
-                                <div className="flex items-start gap-2 mt-4">
-                                    <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-                                    <div className="text-sm text-gray-600">
-                                        <p className="font-medium">Address</p>
-                                        <p>123 Oak Street, Springfield, IL 62701</p>
-                                    </div>
+                            <ActionButton variant="red" onClick={handleEmergencyCall}>
+                                <div className="flex items-center justify-center gap-2">
+                                    <Phone className="w-4 h-4" />
+                                    Emergency Call
                                 </div>
-                            </div>
+                            </ActionButton>
                         </div>
+                    </div>
 
-                        {/* Emergency Contact */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-3 mb-4">
-                                <Phone className="w-5 h-5 text-green-600" />
-                                <span className="font-medium text-gray-700">Emergency Contact</span>
+                    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-4">Patient Info</h3>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Age:</span>
+                                <span className="font-medium">{user?.patient_age || 'N/A'}</span>
                             </div>
-                            <div className="space-y-3">
-                                <h3 className="font-semibold text-gray-800">Dr. Sarah Wilson</h3>
-                                <p className="text-blue-600 font-medium">+1 (555) 123-4567</p>
-                                <ActionButton variant="red" onClick={handleEmergencyCall}>
-                                    <div className="flex items-center justify-center gap-2">
-                                        <Phone className="w-4 h-4" />
-                                        Emergency Call
-                                    </div>
-                                </ActionButton>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Height:</span>
+                                <span className="font-medium">{user?.patient_height || 'N/A'}</span>
                             </div>
-                        </div>
-
-                        {/* Medical Conditions */}
-                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                            <div className="flex items-center gap-3 mb-4">
-                                <Heart className="w-5 h-5 text-red-500" />
-                                <span className="font-medium text-gray-700">Medical Conditions</span>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Weight:</span>
+                                <span className="font-medium">{user?.patient_weight || 'N/A'}</span>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                                <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">Hypertension</span>
-                                <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">Diabetes Type 2</span>
-                                <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-sm">Osteoporosis</span>
+                            <div className="flex justify-between">
+                                <span className="text-gray-600">Device ID:</span>
+                                <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                    {user?.device_info?.device_id || 'N/A'}
+                                </span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right Column - Monitoring Data */}
-                    <div className="lg:col-span-3 space-y-6">
-                        {/* Vital Signs Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <VitalCard
-                                icon={Heart}
-                                title="Heart Rate"
-                                value={data.heart_rate !== null ? data.heart_rate.toString() : "N/A"}
-                                unit="bpm"
-                                status={getVitalStatus('heart_rate', data.heart_rate)}
-                                color="text-red-500"
-                                isAlert={data.heart_rate < 60 || data.heart_rate > 100}
-                            />
-
-                            <VitalCard
-                                icon={Activity}
-                                title="SpO2"
-                                value={data.spo2 !== null ? data.spo2.toString() : "N/A"}
-                                unit="%"
-                                status={getVitalStatus('spo2', data.spo2)}
-                                color="text-blue-500"
-                                isAlert={data.spo2 < 95}
-                            />
-
-                            <VitalCard
-                                icon={Thermometer}
-                                title="Body Temp"
-                                value={data.body_temp !== null ? data.body_temp.toFixed(1) : "N/A"}
-                                unit="°C"
-                                status={getVitalStatus('body_temp', data.body_temp)}
-                                color="text-orange-500"
-                                isAlert={data.body_temp < 36 || data.body_temp > 37.5}
-                            />
-
-                            <div className={`bg-white rounded-xl p-6 shadow-sm border ${data.fall_detected ? 'border-red-200 bg-red-50' : 'border-gray-100'}`}>
-                                <div className="flex items-center gap-3 mb-4">
-                                    <Shield className={`w-5 h-5 ${data.fall_detected ? 'text-red-500' : 'text-green-500'}`} />
-                                    <span className={`text-sm font-medium ${data.fall_detected ? 'text-red-600' : 'text-gray-600'}`}>
-                                        Fall Detection
-                                    </span>
-                                </div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className={`text-3xl font-bold ${data.fall_detected ? 'text-red-700' : 'text-gray-800'}`}>
-                                        {data.fall_detected ? 'ALERT!' : 'Safe'}
-                                    </span>
-                                </div>
-                                <div className="mt-2">
-                                    <span className={`text-sm font-medium ${data.fall_detected ? 'text-red-600' : 'text-green-600'}`}>
-                                        {data.fall_detected ? 'Fall detected — Attention required!' : 'No Falls'}
-                                    </span>
-                                </div>
+                    {data.blood_pressure && (
+                        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                            <h3 className="text-lg font-semibold text-gray-800 mb-4">Blood Pressure</h3>
+                            <div className="text-center">
+                                <p className="text-2xl font-bold text-gray-800">{data.blood_pressure}</p>
+                                <p className="text-sm text-gray-600">mmHg</p>
                             </div>
                         </div>
+                    )}
+                </div>
+            </div>
 
-                        {/* Blood Pressure Card */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <VitalCard
-                                icon={Heart}
-                                title="Blood Pressure"
-                                value={data.blood_pressure || "N/A"}
-                                unit="mmHg"
-                                status={getVitalStatus('blood_pressure', data.blood_pressure)}
-                                color="text-purple-500"
-                            />
-
-                            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                                <div className="flex items-center gap-3 mb-4">
-                                    <Activity className="w-5 h-5 text-gray-600" />
-                                    <span className="text-gray-600 text-sm font-medium">Last Updated</span>
-                                </div>
-                                <div className="flex items-baseline gap-2">
-                                    <span className="text-2xl font-bold text-gray-800">
-                                        {new Date(data.timestamp).toLocaleTimeString()}
-                                    </span>
-                                </div>
-                                <div className="mt-2">
-                                    <span className="text-green-600 text-sm font-medium">
-                                        {new Date(data.timestamp).toLocaleDateString()}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Vital Signs Chart */}
-                        {historicalData.length > 0 && (
-                            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                                <h3 className="font-medium text-gray-700 mb-6">Vital Signs </h3>
-                                <div className="h-64">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={historicalData}>
-                                            <XAxis
-                                                dataKey="time"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fontSize: 12, fill: '#9CA3AF' }}
-                                            />
-                                            <YAxis
-                                                domain={[0, 110]}
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={{ fontSize: 12, fill: '#9CA3AF' }}
-                                            />
-                                            <Line
-                                                type="monotone"
-                                                dataKey="spO2"
-                                                stroke="#3B82F6"
-                                                strokeWidth={2}
-                                                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                                                name="SpO2"
-                                            />
-                                            <Line
-                                                type="monotone"
-                                                dataKey="heartRate"
-                                                stroke="#EF4444"
-                                                strokeWidth={2}
-                                                dot={{ fill: '#EF4444', strokeWidth: 2, r: 4 }}
-                                                name="Heart Rate"
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div className="flex items-center justify-center gap-6 mt-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                        <span className="text-sm text-gray-600">SpO2 (%)</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                                        <span className="text-sm text-gray-600">Heart Rate (bpm)</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+            {/* Data Source Info */}
+            <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <p className="text-sm font-medium text-blue-800">
+                            Last Updated: {data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A'}
+                        </p>
+                        <p className="text-xs text-blue-600">
+                            Device: {user?.device_info?.device_id || 'Unknown'} • 
+                            Status: {user?.device_info?.is_active ? 'Active' : 'Inactive'}
+                        </p>
                     </div>
+                    <button 
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                    >
+                        Refresh Data
+                    </button>
                 </div>
             </div>
         </div>
